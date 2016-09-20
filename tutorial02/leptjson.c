@@ -2,6 +2,7 @@
 #include <assert.h>  /* assert() */
 #include <stdlib.h>  /* NULL, strtod() */
 #include <string.h>  /* strlen strncmp */
+#include <errno.h>
 
 #define EXPECT(c, ch)       do { assert(*c->json == (ch)); c->json++; } while(0)
 
@@ -66,8 +67,12 @@ static int char_range_1_9(const char c) {
  * int = "0" / digit1-9 *digit
  * frac = "." 1*digit
  * exp = ("e" / "E") ["-" / "+"] 1*digit
+ *
+ * @return
+ * 0: not found
+ * >= 0: #chars consumed
  */
-static int lept_parse_number_validate(lept_context *c) {
+static int lept_parse_consume_number(lept_context *c) {
     char* p;
     assert(c);
     assert(c->json);
@@ -122,48 +127,84 @@ static int lept_parse_number_validate(lept_context *c) {
      * valid if json value ends here
      */
     if (!*p || char_whitespace(*p)) {
-        return 1;
+        return p - c->json;
     }
 
     /**
-     * consumes a 'e' or 'E'
+     * consumes /[eE][+-]?[0-9]+/
      */
     if ( (*p == 'e') || (*p == 'E') ) {
         ++p;
-    } else {
-        return 0;
-    }
 
-    if ( (*p == '+') || (*p == '-') ) {
-        ++p;
-    }
+        if ( (*p == '+') || (*p == '-') ) {
+            ++p;
+        }
 
-    if ( char_range_1_9(*p)) {
-        ++p;
+        if (!char_range_0_9(*p)) {
+            return 0;
+        }
+
         while(char_range_0_9(*p)) {
             ++p;
         }
-    } else {
-        return 0;
     }
 
-    if (!*p || char_whitespace(*p) ){
-        return 1;
-    } else {
-        return 0;
+    return p - c->json;
+}
+
+/**
+ * take first (len) chars and convert with strtod
+ */
+static double strtod_with_len(const char* c, int len, int *error) {
+    double result;
+    char* temp;
+    char* end;
+
+    temp = (char*)malloc(1 + len);
+    assert(temp);
+
+    strncpy(temp, c, len);
+    *(temp+len) = '\0';
+
+    result = strtod(temp, &end);
+    assert(end != temp);
+    /* printf("strtod(%s)\n", temp); */
+    free(temp);
+
+    /**
+     * set error = LEPT_PARSE_NUMBER_TOO_BIG on overflow
+     * (ignore underflow)
+     */
+    if (errno == ERANGE && result != 0) {
+        errno = 0;
+        *error = LEPT_PARSE_NUMBER_TOO_BIG;
     }
+
+    return result;
 }
 
 static int lept_parse_number(lept_context* c, lept_value* v) {
-    char* end;
-    if (!lept_parse_number_validate(c)) {
+    int chars_in_number;
+    int error;
+    double number;
+
+    error = 0;
+    chars_in_number = lept_parse_consume_number(c);
+    /* printf("lept_parse_consume_number(%s) -> %d\n", c->json, chars_in_number); */
+
+    if (!chars_in_number) {
         return LEPT_PARSE_INVALID_VALUE;
     }
-    v->n = strtod(c->json, &end);
-    if (c->json == end)
-        return LEPT_PARSE_INVALID_VALUE;
-    c->json = end;
+
+    number = strtod_with_len(c->json, chars_in_number, &error);
+
+    if (error) {
+        return error;
+    }
+    c->json += chars_in_number;
+    v->n = number;
     v->type = LEPT_NUMBER;
+
     return LEPT_PARSE_OK;
 }
 
