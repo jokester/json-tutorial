@@ -1,10 +1,13 @@
 #include "leptjson.h"
 #include <assert.h>  /* assert() */
+#include <math.h>    /* HUGE_VAL */
 #include <stdlib.h>  /* NULL, strtod() */
 #include <string.h>  /* strlen strncmp */
 #include <errno.h>
 
 #define EXPECT(c, ch)       do { assert(*c->json == (ch)); c->json++; } while(0)
+#define ISDIGIT(ch)         (char_range_0_9(ch))
+#define ISDIGIT1TO9(ch)     (char_range_1_9(ch))
 
 typedef struct {
     const char* json;
@@ -208,12 +211,106 @@ static int lept_parse_number(lept_context* c, lept_value* v) {
     return LEPT_PARSE_OK;
 }
 
+/**
+ * Example implementation by milo
+ * number = [ "-" ] int [ frac ] [ exp ]
+ * int = "0" / digit1-9 *digit
+ * frac = "." 1*digit
+ * exp = ("e" / "E") ["-" / "+"] 1*digit
+ */
+static int lept_parse_number2(lept_context* c, lept_value* v) {
+    const char* p = c->json;
+    if (*p == '-') p++;
+    if (*p == '0') p++;
+    else {
+        if (!ISDIGIT1TO9(*p)) return LEPT_PARSE_INVALID_VALUE;
+        for (p++; ISDIGIT(*p); p++);
+    }
+    if (*p == '.') {
+        p++;
+        if (!ISDIGIT(*p)) return LEPT_PARSE_INVALID_VALUE;
+        for (p++; ISDIGIT(*p); p++);
+    }
+    if (*p == 'e' || *p == 'E') {
+        p++;
+        if (*p == '+' || *p == '-') p++;
+        if (!ISDIGIT(*p)) return LEPT_PARSE_INVALID_VALUE;
+        for (p++; ISDIGIT(*p); p++);
+    }
+    errno = 0;
+    v->n = strtod(c->json, NULL);
+    if (errno == ERANGE && v->n == HUGE_VAL) return LEPT_PARSE_NUMBER_TOO_BIG;
+    v->type = LEPT_NUMBER;
+    c->json = p;
+    return LEPT_PARSE_OK;
+}
+
+/**
+ * My implementation - 2
+ * number = [ "-" ] int [ frac ] [ exp ]
+ * int = "0" / digit1-9 *digit
+ * frac = "." 1*digit
+ * exp = ("e" / "E") ["-" / "+"] 1*digit
+ *
+ * regex:
+ *
+ * / -? ( 0 | [1-9][0-9]* ) (\.[0-9]+)? ( [eE] [-+]? [0-9]+ )? /
+ */
+static int lept_parse_number3(lept_context* c, lept_value* v) {
+    char* p = (char*) c->json;
+
+    if (*p == '-')
+        ++p;
+
+    if (*p == '0')
+        ++p;
+    else if (char_range_1_9(*p)) {
+        ++p;
+        while (char_range_0_9(*p)) {
+            ++p;
+        }
+    } else {
+        return LEPT_PARSE_INVALID_VALUE;
+    }
+
+    if (*p == '.') {
+        ++p;
+        if (!char_range_0_9(*p))
+            return LEPT_PARSE_INVALID_VALUE;
+        while(char_range_0_9(*p))
+            ++p;
+    }
+
+    if ( (*p == 'E') || (*p == 'e') ) {
+        ++p;
+
+        if ( (*p == '-') || (*p == '+') ) {
+            ++p;
+        }
+        if (!char_range_0_9(*p))
+            return LEPT_PARSE_INVALID_VALUE;
+        while(char_range_0_9(*p))
+            ++p;
+    }
+
+    /**
+     * error should be reset to 0 before call, and checkeked right after returned from call
+     */
+    errno = 0;
+    v->n = strtod(c->json, NULL);
+    if (errno == ERANGE && v->n == HUGE_VAL) return LEPT_PARSE_NUMBER_TOO_BIG;
+    v->type = LEPT_NUMBER;
+    c->json = p;
+    return LEPT_PARSE_OK;
+
+}
+
 static int lept_parse_value(lept_context* c, lept_value* v) {
     switch (*c->json) {
         case 't':  return lept_parse_true(c, v);
         case 'f':  return lept_parse_false(c, v);
         case 'n':  return lept_parse_null(c, v);
-        default:   return lept_parse_number(c, v);
+        default:   return lept_parse_number3(c, v);
         case '\0': return LEPT_PARSE_EXPECT_VALUE;
     }
 }
