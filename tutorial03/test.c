@@ -107,10 +107,8 @@ static void test_parse_number() {
 static void test_parse_string() {
     TEST_STRING("", "\"\"");
     TEST_STRING("Hello", "\"Hello\"");
-#if 0
     TEST_STRING("Hello\nWorld", "\"Hello\\nWorld\"");
     TEST_STRING("\" \\ / \b \f \n \r \t", "\"\\\" \\\\ \\/ \\b \\f \\n \\r \\t\"");
-#endif
 }
 
 #define TEST_ERROR(error, json)\
@@ -163,19 +161,15 @@ static void test_parse_missing_quotation_mark() {
 }
 
 static void test_parse_invalid_string_escape() {
-#if 0
     TEST_ERROR(LEPT_PARSE_INVALID_STRING_ESCAPE, "\"\\v\"");
     TEST_ERROR(LEPT_PARSE_INVALID_STRING_ESCAPE, "\"\\'\"");
     TEST_ERROR(LEPT_PARSE_INVALID_STRING_ESCAPE, "\"\\0\"");
     TEST_ERROR(LEPT_PARSE_INVALID_STRING_ESCAPE, "\"\\x12\"");
-#endif
 }
 
 static void test_parse_invalid_string_char() {
-#if 0
     TEST_ERROR(LEPT_PARSE_INVALID_STRING_CHAR, "\"\x01\"");
     TEST_ERROR(LEPT_PARSE_INVALID_STRING_CHAR, "\"\x1F\"");
-#endif
 }
 
 static void test_access_null() {
@@ -188,20 +182,43 @@ static void test_access_null() {
 }
 
 static void test_access_boolean() {
-    /* \TODO */
-    /* Use EXPECT_TRUE() and EXPECT_FALSE() */
+    lept_value v;
+    lept_init(&v);
+
+    v.type = LEPT_TRUE;
+    EXPECT_TRUE(lept_get_boolean(&v));
+
+    v.type = LEPT_FALSE;
+    EXPECT_FALSE(lept_get_boolean(&v));
+
+    lept_set_boolean(&v, 1);
+    EXPECT_TRUE(lept_get_boolean(&v));
+
+    lept_set_boolean(&v, 0);
+    EXPECT_FALSE(lept_get_boolean(&v));
 }
 
 static void test_access_number() {
-    /* \TODO */
+    static const double num1 = 0.99f;
+    lept_value v;
+    lept_init(&v);
+
+    v.type = LEPT_TRUE;
+
+    lept_set_number(&v, num1);
+    EXPECT_EQ_INT(LEPT_NUMBER, lept_get_type(&v));
+    EXPECT_EQ_DOUBLE(num1, lept_get_number(&v));
+    EXPECT_EQ_DOUBLE(num1, v.u.n);
 }
 
 static void test_access_string() {
     lept_value v;
     lept_init(&v);
     lept_set_string(&v, "", 0);
+    EXPECT_EQ_INT(0, (int)lept_get_string_length(&v));
     EXPECT_EQ_STRING("", lept_get_string(&v), lept_get_string_length(&v));
     lept_set_string(&v, "Hello", 5);
+    EXPECT_EQ_INT(5, (int)lept_get_string_length(&v));
     EXPECT_EQ_STRING("Hello", lept_get_string(&v), lept_get_string_length(&v));
     lept_free(&v);
 }
