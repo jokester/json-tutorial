@@ -203,7 +203,10 @@ static void test_access_number() {
     lept_init(&v);
     lept_set_string(&v, "a", 1);
 
+    /* valgrind would complain memory leak if we
     v.type = LEPT_TRUE;
+    instead of using lept_set methods
+    */
 
     lept_set_number(&v, num1);
     EXPECT_EQ_INT(LEPT_NUMBER, lept_get_type(&v));
