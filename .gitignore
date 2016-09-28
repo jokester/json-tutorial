@@ -1,1 +1,7 @@
 */build/
+*/CMakeCache.txt
+*/CMakeFiles
+*/cmake_install.cmake
+*/leptjson_test
+*/libleptjson.a
+*/Makefile
