@@ -39,6 +39,21 @@ static void* lept_context_push(lept_context* c, size_t size) {
     return ret;
 }
 
+/**
+ * return 0 ~ 15 on succeed, or -1 on fail
+ */
+static unsigned lept_parse_hex_digit(const char c) {
+    if ( ('0' <= c) && (c <= '9') ) {
+        return c - '0';
+    } else if ( ('a' <= c) && (c <= 'f') ) {
+        return 10 + (c - 'a');
+    } else if ( ('A' <= c) && (c <= 'F') ) {
+        return 10 + (c - 'A');
+    } else {
+        return -1;
+    }
+}
+
 static void* lept_context_pop(lept_context* c, size_t size) {
     assert(c->top >= size);
     return c->stack + (c->top -= size);
@@ -90,9 +105,25 @@ static int lept_parse_number(lept_context* c, lept_value* v) {
     return LEPT_PARSE_OK;
 }
 
+/**
+ * when fail: don't touch *u and return a false-y value
+ * when succeed: write result to u and return new p
+ */
 static const char* lept_parse_hex4(const char* p, unsigned* u) {
-    /* \TODO */
-    return p;
+    unsigned result = 0;
+    int offset = 0;
+
+    for(offset=0; offset < 4; offset++) {
+        char c = *(p + offset);
+        if (!c) return 0;
+
+        unsigned digit = lept_parse_hex_digit(c);
+        if (digit < 0) return 0;
+
+        result = (result << 8) | digit;
+    }
+    *u = result;
+    return p + 4;
 }
 
 static void lept_encode_utf8(lept_context* c, unsigned u) {
